@@ -38,9 +38,8 @@ class MealViewModel: ObservableObject {  // 🧠 ObservableObject : SwiftUI View
                     // TranslationAPI의 시그니처 : translateToKorean(_ text: String)
                     // → 외부 인자 레이블이 없으므로 (text:)를 쓰지 않고 그냥 값만 전달
                     let translated = try await TranslationAPI.translateToKorean(original)
-                    
-                    // 5) 번역 성공 시 translatedInstructions에 저장
                     self.translatedInstructions = translated
+
                 } catch {
                     // 번역이 실패해도 앱이 죽지 않도록, 로그만 찍고 영어로 fallback
                     print("번역 오류:", error)
