@@ -1,43 +1,60 @@
-import SwiftUI   // 📝 SwiftUI와 @MainActor, ObservableObject 등을 사용하기 위해 임포트
+import Foundation   // 🧩 네트워크, 비동기 처리 등에 필요한 기본 프레임워크 임포트
 
-// 🧠 ViewModel은 화면(View)에서 사용할 데이터를 관리하는 클래스
-//    @MainActor : 이 클래스 안의 코드가 항상 메인 스레드에서 실행되도록 보장 (UI 관련이라 필요)
+// @MainActor : 이 클래스 안의 모든 공개 메서드는 메인 스레드(UI 스레드)에서 실행된다는 의미
 @MainActor
-class MealViewModel: ObservableObject {  // 🧩 ObservableObject : 화면에서 이 객체를 구독하고 변경을 감지할 수 있게 해주는 프로토콜
+class MealViewModel: ObservableObject {  // 🧠 ObservableObject : SwiftUI View에서 감시(구독)할 수 있는 상태 객체
     
-    // 🍽 현재 화면에 보여줄 메뉴 데이터
-    // @Published : 값이 바뀌면 SwiftUI가 자동으로 화면을 다시 그리도록 알려주는 속성
+    // 🍽 현재 불러온 메뉴(없을 수도 있어서 옵셔널)
     @Published var meal: Meal? = nil
     
-    // ⏳ 네트워크 요청 중인지 나타내는 상태
+    // 🇰🇷 번역된 조리 설명 (없으면 영어 설명 사용)
+    @Published var translatedInstructions: String? = nil
+    
+    // ⏳ API 호출 중인지 표시 (로딩 인디케이터용)
     @Published var isLoading: Bool = false
     
     // ⚠️ 에러가 발생했을 때 사용자에게 보여줄 메시지
     @Published var errorMessage: String? = nil
     
-    // 🧱 초기 생성자 (지금은 특별히 하는 일 없음)
-    init() {}
-    
-    // 🌐 랜덤 메뉴를 불러오는 비동기 함수
-    //    async : 네트워크처럼 시간이 걸리는 작업을 비동기로 처리
+    // ⭐ 랜덤 메뉴를 불러오는 비동기 함수
     func loadRandomMeal() async {
-        // 요청 시작 → 로딩 상태 켜기
+        // 1) 호출 시작 → 로딩 상태 on, 에러/번역 초기화
         isLoading = true
-        errorMessage = nil   // 이전 에러 메시지 초기화
+        errorMessage = nil
+        translatedInstructions = nil
         
         do {
-            // 🔄 MealAPI를 통해 실제 랜덤 메뉴 데이터를 받아옴
-            let newMeal = try await MealAPI.fetchRandomMeal()
+            // 2) TheMealDB에서 랜덤 메뉴 1개 받아오기
+            //    MealAPI의 fetchRandomMeal은 static 함수이므로
+            //    인스턴스가 아니라 타입 이름으로 호출해야 함 (MealAPI.fetchRandomMeal)
+            let result = try await MealAPI.fetchRandomMeal()
             
-            // ✅ 성공하면 화면에 보여줄 meal 값 업데이트
-            self.meal = newMeal
+            // 3) 받아온 결과를 화면용 상태에 반영
+            self.meal = result
+            
+            // 4) 조리 설명이 있을 경우에만 번역 시도
+            if let original = result.strInstructions {
+                do {
+                    // TranslationAPI의 시그니처 : translateToKorean(_ text: String)
+                    // → 외부 인자 레이블이 없으므로 (text:)를 쓰지 않고 그냥 값만 전달
+                    let translated = try await TranslationAPI.translateToKorean(original)
+                    
+                    // 5) 번역 성공 시 translatedInstructions에 저장
+                    self.translatedInstructions = translated
+                } catch {
+                    // 번역이 실패해도 앱이 죽지 않도록, 로그만 찍고 영어로 fallback
+                    print("번역 오류:", error)
+                    self.translatedInstructions = nil
+                }
+            }
+            
         } catch {
-            // ❌ 실패 시 에러 메시지 저장 → 나중에 Text로 보여줄 수 있음
-            self.errorMessage = "메뉴를 불러오는데 실패했습니다. 다시 시도해주세요."
-            print("MealAPI Error:", error)
+            // 6) API 호출 자체가 실패한 경우
+            print("API 오류:", error)
+            self.errorMessage = "메뉴를 불러오는데 실패했습니다."
         }
         
-        // 요청 종료 → 로딩 상태 끄기
+        // 7) 모든 작업 종료 → 로딩 상태 off
         isLoading = false
     }
 }
